@@ -1,1033 +1,969 @@
-# LINE AI CONSULTATION AUTOMATION
+# LINE AI Consultation Automation
 
-> 日本の開発相談を、
-> LINE上で受け付ける。
->
-> **Not a chatbot.
-> A consultation system built for real conversations.**
+> **日本の開発相談を、AIで自動化するのではなく、安心して続けられる仕組みへ。**
 
----
+Java / Spring Boot ・ OpenAI API ・ LINE Messaging API ・ AWS
 
-## このシステムについて
-
-これは、単にOpenAI APIをLINEに接続したチャットボットではありません。
-
-現在、私自身の日本向けソフトウェア開発・自動化案件の問い合わせ窓口として実際に運用している、**LINE AI Consultation Automation System** です。
-
-ユーザーから届いた自然言語の相談を、
-
-```text
-LINE Message
-      ↓
-Webhook
-      ↓
-Signature Verification
-      ↓
-Event Deduplication
-      ↓
-Asynchronous Processing
-      ↓
-AI Analysis
-      ↓
-Structured JSON Validation
-      ↓
-Java Business Logic
-      ↓
-Consultation State
-      ↓
-Reply / Push Delivery
-```
-
-という一連のシステムとして処理します。
-
-重要なのは、
-
-> AIがそれらしい文章を返すこと
-
-ではありません。
-
-実際の運用では、
-
-* 同じWebhookが複数回届く
-* AIの応答に時間がかかる
-* AI APIがタイムアウトする
-* AIが不正なJSONを返す
-* AIが存在しない情報を生成する
-* Reply Tokenが使用できなくなる
-* LINE APIが失敗する
-* ユーザーが複数回にわたって相談する
-* 複数のメッセージが同時に届く
-* サーバーが再起動する
-
-といった問題が発生します。
-
-このシステムは、**正常な1回の会話だけではなく、失敗することを前提に設計しています。**
+実際の開発相談を支える、AI相談システムの設計と運用。
 
 ---
 
-# The Problem
+# はじめに
 
-一般的なAIチャットボットは、次のような構造です。
+AIチャットボットを作ること自体は、それほど難しくありません。
 
-```text
-User
-  ↓
-LLM
-  ↓
-Text Response
-```
+しかし、
 
-しかし、実際の開発外注相談ではこれだけでは不十分です。
+実際のサービスとして運用を始めると、
 
-ユーザーが、
+本当に難しいのはAIではなく、
 
-> LINE Botを開発したいのですが、
-> どのくらい期間が必要ですか？
+**その周囲のシステム設計**です。
 
-と聞いたとき、
+例えば、
 
-単純に「要件によります」と答えるだけでは相談は進みません。
+- ユーザーが短時間に複数のメッセージを送る
+- AIの応答が遅れる
+- 外部APIが一時的に利用できない
+- 要件が決まっていない状態で相談が始まる
+- 数日かけて一つの相談が進んでいく
 
-また、
+こうした状況では、
 
-> 相談だけでも大丈夫ですか？
+「AIが自然な文章を返す」
 
-というユーザーに対して、いきなり予算を聞くのも自然ではありません。
+だけでは十分ではありません。
 
-実際の相談では、
+相談全体を自然に進め、
 
-```text
-何を作りたいのか
-      ↓
-何を質問されたのか
-      ↓
-すでに何を回答したのか
-      ↓
-何の情報が不足しているのか
-      ↓
-次に何を確認すべきか
-      ↓
-どの情報を確定してはいけないか
-```
+安定して運用できる仕組みが必要になります。
 
-を考える必要があります。
+このプロジェクトは、
 
-そのため、このシステムではAIを単独の意思決定者として扱っていません。
+そのためのバックエンドシステムとして設計しています。
 
 ---
 
-# AI Is Not The System
+# このプロジェクトについて
 
-このシステムの中心的な設計思想は、
+**LINE AI Consultation Automation** は、
 
-> **AIにシステムの権限を与えない**
+日本向けの開発相談をLINE上で受け付けるためのシステムです。
 
-ことです。
+目的は、
+
+チャットボットを作ることではありません。
+
+相談相手が人でもAIでも、
+
+利用者にとって自然で安心できる相談体験を提供することです。
+
+そのため、
+
+AIは相談を支援する一つのコンポーネントとして利用し、
+
+相談の流れやビジネスルール、
+
+状態管理や外部サービスとの連携は、
+
+バックエンドアプリケーションが担当します。
+
+```text
+LINE
+   │
+   ▼
+Backend Application
+   │
+   ├── Conversation Management
+   ├── AI Analysis
+   ├── Business Rules
+   ├── Validation
+   └── Message Delivery
+```
+
+この役割分担により、
+
+AIの出力だけに依存しない、
+
+安定した相談システムを実現しています。
+
+---
+
+# チャットボットではなく、「相談」を設計する
+
+一般的なチャットボットは、
+
+質問に対して回答を返すことを目的としています。
+
+一方、開発相談では、
+
+最初から必要な情報がすべて揃っていることはほとんどありません。
+
+例えば、
+
+「LINE Botを作りたい」
+
+という一言だけでは、
+
+費用も期間も判断できません。
+
+まずは、
+
+- 実現したいこと
+- 現在の業務
+- 必要な機能
+- 希望するスケジュール
+
+などを整理しながら、
+
+少しずつ要件を明確にしていく必要があります。
+
+そのため本システムでは、
+
+一つひとつのメッセージではなく、
+
+**相談全体の流れ**を管理対象としています。
+
+---
+
+# 設計思想
+
+このプロジェクトで一貫している考え方があります。
+
+> **AIを信頼するのではなく、AIを安心して活用できる仕組みを設計すること。**
 
 AIは、
 
+自然言語の理解や相談内容の整理を担当します。
+
+一方、
+
+最終的な判断やシステム制御は、
+
+常にバックエンドアプリケーションが担当します。
+
+AIは優秀ですが、
+
+常に正しいとは限りません。
+
+だからこそ、
+
+AIの能力に依存するのではなく、
+
+システム全体として信頼できる構成を目指しています。
+
+---
+
+# このREADMEについて
+
+このREADMEで紹介しているのは、
+
+ソースコードの実装方法ではありません。
+
+実際の運用を通して考えた、
+
+設計方針やアーキテクチャの考え方です。
+
+以降のセクションでは、
+
+AIとの役割分担、
+
+相談フロー、
+
+信頼性を重視した設計について紹介します。
+---
+
+# システムアーキテクチャ
+
+本システムでは、
+
+AIをシステムの中心には置いていません。
+
+中心にあるのは、
+
+**バックエンドアプリケーション**です。
+
+AIは相談内容を理解するためのコンポーネントとして利用し、
+
+システム全体の制御はアプリケーションが担当します。
+
 ```text
-Natural Language
-      ↓
-Intent
-      ↓
-Structured JSON
-      ↓
-Draft Response
+                 User
+                  │
+                  ▼
+         LINE Messaging API
+                  │
+                  ▼
+      Backend Application
+                  │
+        ┌──────────────┐
+        │              │
+        ▼              ▼
+ Conversation      AI Analysis
+   Management
+        │              │
+        └──────┬───────┘
+               ▼
+      Business Processing
+               │
+               ▼
+      Response Delivery
 ```
 
-までを担当します。
+それぞれが独立した責任を持つことで、
+
+変更や機能追加にも柔軟に対応できる構成を目指しています。
+
+---
+
+# 責務を明確に分離する
+
+AIは非常に便利な技術ですが、
+
+すべてを任せるべきではないと考えています。
+
+本システムでは、
+
+それぞれの役割を明確に分けています。
+
+| Component | Responsibility |
+|------------|----------------|
+| AI | 相談内容の理解・意図分析・回答案の生成 |
+| Backend | ビジネスルール・状態管理・システム制御 |
+| External Services | メッセージ配信・各種API連携 |
+
+役割を分離することで、
+
+一つのコンポーネントに過度な責任が集中しない構成になっています。
+
+---
+
+# AIとの付き合い方
+
+AIは、
+
+自然な文章を生成することが得意です。
+
+一方で、
+
+常に正しい判断を行うとは限りません。
+
+そのため、
+
+AIの出力をそのまま利用することはありません。
+
+AIは、
+
+相談内容を理解し、
+
+回答の候補を生成します。
 
 その後、
 
-```text
-Structured JSON
-      ↓
-Parser
-      ↓
-Validation
-      ↓
-Java Business Logic
-      ↓
-State / Memo / Draft
-      ↓
-LINE Delivery
-```
+アプリケーション側で内容を確認し、
 
-をJavaアプリケーションが担当します。
-
-AIは、
-
-* LINE APIを直接呼び出さない
-* ユーザー状態を直接変更しない
-* 外部APIを直接呼び出さない
-* 送信処理を直接実行しない
-* 検証を回避できない
-
-という境界を持っています。
+ビジネスルールに沿って処理を行います。
 
 ```text
-┌──────────────────────────────┐
-│            AI                │
-│                              │
-│  Analyze                     │
-│  Classify                    │
-│  Generate Draft              │
-│                              │
-│  ❌ No API Access            │
-│  ❌ No State Mutation        │
-│  ❌ No Direct Delivery       │
-└──────────────┬───────────────┘
-               │
-               ▼
-        Structured JSON
-               │
-               ▼
-┌──────────────────────────────┐
-│       Java Application       │
-│                              │
-│  Validate                    │
-│  Decide                      │
-│  Update State                │
-│  Deliver                     │
-└──────────────────────────────┘
+User Input
+
+      │
+
+      ▼
+
+AI Analysis
+
+      │
+
+      ▼
+
+Application Validation
+
+      │
+
+      ▼
+
+Business Decision
+
+      │
+
+      ▼
+
+Response
 ```
 
-AIが正しい回答を返すことを期待するだけではなく、
+AIは相談を支援するための存在であり、
 
-**AIが間違えた場合でも、システム側で被害を限定する構造**
-
-を目指しています。
+システム全体を制御する存在ではありません。
 
 ---
 
-# AI Hallucination Is A System Problem
+# 相談に必要な情報を整理する
 
-AIの「幻覚」をプロンプトだけで解決しようとはしていません。
+開発相談では、
 
-このシステムでは、情報を複数の責任領域に分離しています。
+一度のメッセージですべての情報が揃うことはほとんどありません。
 
-```text
-policy.md
-    ↓
-Consultation Rules
-Truthfulness
-Safety
-Business Policy
+例えば、
 
-examples.md
-    ↓
-Conversation Style
-Consultation Flow
-Japanese Communication
+「LINE Botを作りたい」
 
-profile.md
-    ↓
-Developer Facts
-Actual Experience
-Confirmed Technologies
+という相談だけでは、
 
-faq.md
-    ↓
-Business Knowledge
-Frequently Asked Questions
-```
+見積もりもスケジュールも決められません。
 
-それぞれの役割は異なります。
+そのため、
 
-## policy.md
+本システムでは、
 
-最も高い優先順位を持つルールです。
+現在の相談状況に応じて、
 
-* 事実性
-* 禁止される主張
-* 価格の扱い
-* 納期の扱い
-* 対応可否の扱い
-* 情報不足時の対応
-* 相談フロー
-* 安全ルール
-
-を定義します。
-
-## profile.md
-
-実際の開発経験や確認された技術情報を管理します。
-
-AIは、ここにない経歴を勝手に作りません。
-
-## faq.md
-
-事前に確認されたビジネス情報を管理します。
-
-FAQにない価格・契約条件・保証などを推測しません。
-
-## examples.md
-
-事実情報ではありません。
-
-これは、
-
-* 日本語の自然な相談対応
-* 相談の進め方
-* 何を先に答えるか
-* 複数の質問への対応
-* 不要な質問の回避
-* 顧客の不安を減らす表現
-
-を学習させるためのfew-shot consultation examplesです。
-
----
-
-# Prompt Assembly
-
-プロンプトは単純に全ファイルを毎回連結するのではありません。
+必要な情報を整理しながら会話を進めます。
 
 ```text
-┌────────────────────────────┐
-│ 1. policy.md               │
-│    Highest Authority       │
-├────────────────────────────┤
-│ 2. Relevant Examples       │
-│    Only 2–3 selected       │
-├────────────────────────────┤
-│ 3. profile.md              │
-│    Verified Facts          │
-├────────────────────────────┤
-│ 4. faq.md                  │
-│    Business Knowledge      │
-├────────────────────────────┤
-│ 5. JSON Output Rules       │
-├────────────────────────────┤
-│ 6. Consultation Flow       │
-├────────────────────────────┤
-│ 7. Safety Rules            │
-└────────────────────────────┘
-```
-
-`examples.md`は全量を毎回投入しません。
-
-問い合わせ内容に対して、
-
-```text
-Explicit Tags
-      ↓
-Example Title
-      ↓
-Example Content
-      ↓
-Keyword Matching
-```
-
-の順で関連性を判断し、必要な2〜3件だけを選択します。
-
-EmbeddingやVector Databaseを使用する必要がない範囲では、あえて導入しません。
-
-```text
-No Vector DB
-No Embeddings
-No RAG
-No External Retrieval Service
-```
-
-シンプルな問題に、複雑なシステムを追加しない。
-
-これも重要な設計判断です。
-
----
-
-# Truthfulness Policy
-
-AIが最も簡単に「それっぽい嘘」をつけるのは、
-
-* 価格
-* 納期
-* 経験
-* 対応可能性
-* 外部API仕様
-
-です。
-
-そのため、対応可能性を次の3段階に分けています。
-
-```text
-CONFIRMED
-    ↓
-PROBABLE
-    ↓
-UNKNOWN
-```
-
-## CONFIRMED
-
-実際の経験や情報源で確認できる場合。
-
-## PROBABLE
-
-関連する経験はあるが、正確な仕様をまだ確認していない場合。
-
-## UNKNOWN
-
-確認できる情報がない場合。
-
-この場合、
-
-```text
-できます
-```
-
-とも、
-
-```text
-できません
-```
-
-とも断定しません。
-
-必要な要件を確認したうえで判断します。
-
-同様に、AIは、
-
-```text
-〇〇円でできます
-1週間で完成します
-必ず対応できます
-```
-
-といった確定的な発言をしません。
-
-最終的な価格・納期・対応可否は、要件確認後に判断します。
-
----
-
-# Real Consultation Flow
-
-例えば、ユーザーが次のように相談します。
-
-```text
-LINEの自動化を作りたいのですが、
-いくらくらいで可能でしょうか？
-```
-
-システムは、いきなり金額を作りません。
-
-```text
-Development Scope
-      ↓
-Required Functions
-      ↓
-Current Operation
-      ↓
-Budget
-      ↓
-Deadline
-      ↓
+Current Situation
+        │
+        ▼
+Required Information
+        │
+        ▼
+Conversation Progress
+        │
+        ▼
 Requirement Review
-      ↓
-Quotation / Proposal
 ```
 
-また、ユーザーが期間について質問した場合、
+質問へ順番に答えることよりも、
 
-```text
-User:
-LINE Botを開発したいのですが、
-どのくらい期間が必要ですか？
-```
-
-価格だけを聞き返すのではなく、
-
-```text
-開発内容や連携する機能によって異なるため、
-具体的な要件を確認したうえで
-スケジュールをご案内しています。
-
-現在考えている主な機能を教えていただけますでしょうか？
-```
-
-のように、ユーザーの質問にまず対応し、次の相談に進めます。
-
-ユーザーが、
-
-```text
-相談だけでも大丈夫ですか？
-```
-
-と聞いた場合は、
-
-```text
-もちろんです。
-
-まだ仕様が決まっていない段階でも問題ございません。
-「こんなことを実現したい」という内容から
-お気軽にご相談ください。
-```
-
-と答えるべきです。
-
-**相談の目的は、質問を順番に消化することではありません。**
-
-ユーザーが何を知りたいのかを理解し、
-自然に必要な情報を集めることです。
+相談全体を前に進めることを重視しています。
 
 ---
 
-# Consultation State
+# コンテキスト設計
 
-相談は1回のメッセージで終わりません。
+相談内容は毎回異なります。
+
+そのため、
+
+すべての知識を毎回AIへ渡すのではなく、
+
+相談内容に応じて必要な情報だけを利用します。
+
+```text
+Business Rules
+        │
+        ▼
+Verified Information
+        │
+        ▼
+Conversation Context
+        │
+        ▼
+AI Processing
+```
+
+これにより、
+
+不要な情報によるノイズを抑え、
+
+相談内容に集中した応答を実現しています。
+
+なお、
+
+具体的なコンテキスト構築の実装方法については公開していません。
+
+このREADMEでは、
+
+実装手法ではなく、
+
+設計思想を共有することを目的としています。
+
+---
+
+# 状態を持つ相談システム
+
+一般的なチャットでは、
+
+一つひとつのメッセージを独立して処理します。
+
+しかし、
+
+実際の開発相談では、
+
+会話全体の流れを理解することが重要です。
+
+例えば、
 
 ```text
 Message 1
 「LINE Botを作りたい」
 
-        ↓
+        ▼
 
 Message 2
-「予算は300万円ほどです」
+「予約機能も必要です」
 
-        ↓
+        ▼
 
 Message 3
-「納期は3ヶ月です」
-
-        ↓
-
-Message 4
-「予約機能と管理画面が必要です」
+「予算は300万円くらいです」
 ```
 
-システムはこれらを別々の質問として扱いません。
+これらは別々の質問ではなく、
 
-```text
-CONSULTATION_START
-        ↓
-BUDGET
-        ↓
-DEADLINE
-        ↓
-FEATURES
-        ↓
-REQUIREMENT REVIEW
-        ↓
-CONSULTATION COMPLETE
-```
+一つの相談です。
 
-現在の会話状態や過去の回答を考慮し、
+本システムでは、
 
-```text
-すでに聞いたこと
-```
+相談全体を一つの状態として管理し、
 
-を何度も聞かないことを重視しています。
+過去のやり取りを踏まえながら、
+
+自然に相談を進められるよう設計しています。
 
 ---
 
-# Production Failure Handling
+# シンプルであることも設計品質
 
-このシステムは、正常系だけを想定していません。
+システム設計では、
 
-## Duplicate Webhook
+新しい技術を導入することよりも、
 
-同じイベントが複数回届く可能性があります。
+適切な技術を選択することが重要です。
 
-```text
-Same Event
-    ↓
-Event ID
-    ↓
-Deduplication
-    ↓
-Process Once
-```
+必要以上に複雑な構成は、
 
-## Slow AI
+保守性や運用性を低下させる場合があります。
 
-AIの応答が遅れる可能性があります。
+そのため本プロジェクトでは、
 
-```text
-Webhook
-    ↓
-Async Dispatch
-    ↓
-AI Processing
-```
+実際の運用に必要な構成を見極め、
 
-Webhook受信とAI処理を分離します。
+シンプルで理解しやすいアーキテクチャを心掛けています。
 
-## AI Timeout
+技術は目的ではありません。
 
-AIが利用できない場合でも、アプリケーション全体が停止しないようにします。
+継続して運用できるシステムを実現するための手段です。
 
-```text
-AI Request
-    │
-    ├── Success
-    │      ↓
-    │   Validate
-    │      ↓
-    │   Process
-    │
-    └── Timeout / Error
-           ↓
-       Safe Fallback
-```
+---
 
-## Invalid AI Output
+ここまでが、
 
-AIが不正なJSONや想定外の値を返した場合、
+このプロジェクトの設計思想です。
 
-```text
-AI Output
-    ↓
-Parser
-    ↓
-Validation
-    ↓
-Business Logic
-```
+次のセクションでは、
 
-という境界を通過しなければ処理されません。
+実運用を前提とした信頼性設計や、
 
-## Reply Token Failure
+障害への考え方について紹介します。
 
-LINEのReply Tokenには制限があります。
+---
+
+# Reliability by Design
+
+システムは、
+
+正常に動作することだけを前提には設計できません。
+
+実際の運用では、
+
+外部APIの障害、
+
+ネットワーク遅延、
+
+AIの応答時間、
+
+想定外の入力など、
+
+さまざまな要因が発生します。
+
+重要なのは、
+
+障害を完全になくすことではなく、
+
+障害が発生してもサービスを継続できることです。
+
+本プロジェクトでは、
+
+その考え方をアーキテクチャ全体に取り入れています。
+
+---
+
+# Production-Oriented Design
+
+このシステムは、
+
+デモや学習用のサンプルとして設計したものではありません。
+
+実際の開発相談を継続して運用することを前提に、
+
+安定性と保守性を重視しています。
+
+例えば、
+
+- 同時に複数の相談が進行する
+- 一つの相談が数日にわたって続く
+- 外部サービスが一時的に利用できない
+- AIの応答品質が一定ではない
+
+このような状況でも、
+
+相談全体が自然に継続できることを目的としています。
+
+---
+
+# Defensive Architecture
+
+AIは優れた技術ですが、
+
+システム全体の信頼性を保証するものではありません。
 
 そのため、
 
-```text
-Message
-   ↓
-Processing
-   │
-   ├── Reply Available
-   │        ↓
-   │      Reply
-   │
-   └── Reply Failed / Expired
-            ↓
-       Push Fallback
-```
+AIの出力は、
 
-という構造を持ちます。
+アプリケーションの一部として扱います。
 
-返信に失敗したからといって、可能な限りユーザーを無反応のままにしません。
+システム全体は、
 
----
-
-# User-Level Concurrency
-
-複数のメッセージが同時に届いた場合、
-
-```text
-Message A
-Message B
-Message C
-```
-
-を無秩序に並列処理すると、
-
-```text
-State A
-State B
-State C
-```
-
-の競合が発生する可能性があります。
-
-そのため、ユーザー単位で処理を直列化します。
-
-```text
-User A
-  ├── Message 1
-  ├── Message 2
-  └── Message 3
-
-User B
-  ├── Message 1
-  └── Message 2
-```
-
-ユーザーAとユーザーBは並列に処理できます。
-
-しかし、同じユーザーの会話は順序を維持します。
-
----
-
-# Architecture
-
-```text
-┌────────────────────────────┐
-│       LINE Webhook         │
-└──────────────┬─────────────┘
-               │
-               ▼
-┌────────────────────────────┐
-│    Signature Verification  │
-└──────────────┬─────────────┘
-               │
-               ▼
-┌────────────────────────────┐
-│     Event Deduplication    │
-└──────────────┬─────────────┘
-               │
-               ▼
-┌────────────────────────────┐
-│     Async Event Dispatch   │
-│     Queue / Backpressure   │
-└──────────────┬─────────────┘
-               │
-               ▼
-┌────────────────────────────┐
-│    User-Level Serialization│
-└──────────────┬─────────────┘
-               │
-               ▼
-┌────────────────────────────┐
-│       AI Analysis          │
-│    OpenAI API Integration  │
-└──────────────┬─────────────┘
-               │
-               ▼
-┌────────────────────────────┐
-│    Structured JSON         │
-│       Validation           │
-└──────────────┬─────────────┘
-               │
-               ▼
-┌────────────────────────────┐
-│     Java Business Logic    │
-│                            │
-│  Intent                    │
-│  Consultation State        │
-│  Draft / Memo              │
-└──────────────┬─────────────┘
-               │
-               ▼
-┌────────────────────────────┐
-│     LINE Delivery          │
-│     Reply / Push           │
-└──────────────┬─────────────┘
-               │
-               ▼
-┌────────────────────────────┐
-│       Trace & Logs         │
-└────────────────────────────┘
-```
-
----
-
-# Built For Failure
-
-| Problem                 | Handling                      |
-| ----------------------- | ----------------------------- |
-| Duplicate webhook       | Event ID deduplication        |
-| Invalid request         | Signature verification        |
-| Slow AI                 | Asynchronous processing       |
-| AI timeout              | Safe fallback                 |
-| Invalid AI output       | Structured JSON validation    |
-| Multiple messages       | User-level serialization      |
-| Reply Token unavailable | Push fallback                 |
-| LINE API failure        | Delivery fallback             |
-| Repeated questions      | Conversation state / history  |
-| Hallucinated facts      | Policy + knowledge boundaries |
-| Unknown capability      | No unsupported claim          |
-| Token / API errors      | Explicit error handling       |
-
----
-
-# What I Actually Built
-
-このプロジェクトで重要なのは、
-
-```text
-LINE APIを呼べた
-```
-
-ことではありません。
-
-本当に難しかったのは、
-
-```text
-AIをどこまで信用し、
-どこから先を信用しないか
-```
-
-を決めることでした。
-
-AIに全部を任せれば、最初は簡単です。
+複数の役割が協調することで動作します。
 
 ```text
 User
-  ↓
-GPT
-  ↓
-Reply
+
+   │
+
+   ▼
+
+Conversation
+
+   │
+
+   ▼
+
+AI Analysis
+
+   │
+
+   ▼
+
+Application Validation
+
+   │
+
+   ▼
+
+Business Processing
+
+   │
+
+   ▼
+
+Response
 ```
 
-しかし、実際に運用すると、
+一つの処理結果だけに依存しないことが、
 
-* AIが知らない経歴を作る
-* 価格を勝手に確定する
-* 納期を勝手に約束する
-* ユーザーの質問を無視する
-* 同じ質問を繰り返す
-* 事実と会話スタイルを混同する
-* 不正な出力を返す
-* API障害時に応答できない
-
-といった問題が発生します。
-
-そのため、プロンプトを長くするだけではなく、
-
-```text
-Policy
-   ↓
-Knowledge
-   ↓
-Examples
-   ↓
-Structured Output
-   ↓
-Parser
-   ↓
-Validation
-   ↓
-Business Logic
-   ↓
-Delivery
-```
-
-という複数の境界に分けました。
-
-**AIに「間違えないで」とお願いするのではなく、間違えてもシステム全体が壊れないようにする。**
-
-これがこのプロジェクトの中心的な設計思想です。
+安定したサービスにつながると考えています。
 
 ---
 
-# Testing
+# Reliability Is a Design Decision
 
-このシステムでは、単に、
+信頼性は、
 
-> AIが返事をした
+後から追加する機能ではありません。
 
-だけをテストしていません。
+設計の初期段階から考えるべき要素です。
 
-```text
-Webhook
-    ↓
-Signature
-    ↓
-Deduplication
-    ↓
-Async Processing
-    ↓
-AI
-    ↓
-JSON Parsing
-    ↓
-Intent
-    ↓
-Consultation State
-    ↓
-Business Logic
-    ↓
-LINE Delivery
-```
+例えば、
 
-の各段階を検証しています。
+AIが期待どおりに動作しない場合でも、
 
-検証対象には、
+アプリケーション全体が停止しないこと。
 
-* Webhook signature verification
-* Duplicate event handling
-* Event deduplication
-* Async processing
-* Queue pressure
-* User-level serialization
-* AI timeout
-* AI unavailable fallback
-* Invalid JSON
-* Unknown intent
-* Consultation state transitions
-* Multi-turn conversations
-* Early consultation completion
-* Japanese text integrity
-* Reply Token expiration
-* Reply API failure
-* Push fallback
-* Real HTTP request paths
+一部のコンポーネントに問題が発生しても、
 
-が含まれます。
+影響を最小限に抑えられること。
 
-また、実際のOpenAI API呼び出しによる検証も行っています。
+将来的な仕様変更にも対応しやすいこと。
 
-テストで重要なのは、テスト数そのものではありません。
+こうした考え方を前提に、
 
-```text
-AIが遅れた場合
-LINEのReplyが失敗した場合
-同じイベントが二度届いた場合
-複数のメッセージが同時に届いた場合
-AIが不正な出力を返した場合
-```
-
-に、
-
-> システムがどう動くか
-
-を確認することです。
+システム全体を構成しています。
 
 ---
 
-# Production Experience
+# Observability
 
-このシステムは、チュートリアルやサンプルコードとして作ったものではありません。
+運用では、
 
-実際の日本向け開発外注相談の窓口として、
+「動いていること」だけでは十分ではありません。
 
-```text
-LINE
-  ↓
-AWS
-  ↓
-Spring Boot
-  ↓
-OpenAI API
-  ↓
-LINE Messaging API
-```
+問題が発生したときに、
 
-を実際に接続して運用しています。
+原因を把握し、
 
-運用中に見つかった問題を、
+改善につなげられることが重要です。
 
-```text
-発見
-  ↓
-原因分析
-  ↓
-最小限の修正
-  ↓
-テスト
-  ↓
-実際の実行検証
-  ↓
-再改善
-```
+そのため、
 
-というサイクルで改善しています。
+システム全体の状態を追跡できる構成を採用しています。
+
+ログや実行状況を確認しながら、
+
+問題を特定し、
+
+改善を繰り返していく。
+
+その継続的な運用も、
+
+システム設計の一部だと考えています。
 
 ---
 
-# Developer Background
+# Built to Evolve
+
+運用を続ける中で、
+
+相談内容も、
+
+利用者の要望も、
+
+AIそのものも変化していきます。
+
+だからこそ、
+
+変化に対応しやすい構造を最初から設計することを重視しています。
+
+```text
+Requirement
+
+      │
+
+      ▼
+
+Architecture
+
+      │
+
+      ▼
+
+Implementation
+
+      │
+
+      ▼
+
+Operation
+
+      │
+
+      ▼
+
+Feedback
+
+      │
+
+      ▼
+
+Improvement
+```
+
+完成を目指すのではなく、
+
+改善し続けられるシステムを目指しています。
+
+---
+
+# More Than an AI Project
+
+このプロジェクトで実現したかったのは、
+
+AIチャットボットではありません。
+
+私が設計したかったのは、
+
+AIを安心して利用できるサービス基盤です。
+
+AIは、
+
+時間とともに進化していきます。
+
+しかし、
+
+サービスを支える設計原則は、
+
+大きく変わりません。
+
+責務を分離すること。
+
+状態を適切に管理すること。
+
+変化に対応できること。
+
+そして、
+
+実際の運用に耐えられること。
+
+それらを重視しながら、
+
+このシステムを継続的に改善しています。
+---
+
+# 開発に対する考え方
 
 私は、
 
-* Java / Spring Boot
-* REST API
-* Webhook
-* 外部API連携
-* OpenAI API
-* LINE Messaging API
-* Meta Threads API
-* TradingView Webhook
-* AWS EC2
-* Linux
-* Nginx
-* Telegram Bot API
+新しい技術を使うこと自体を目的にはしていません。
 
-などを使用したシステムを実際に構築・運用しています。
+AIも、
 
-特に、
+クラウドも、
 
-```text
-外部サービス
-      +
-自分のアプリケーション
-      +
-AI
-      +
-実際の運用
-```
+外部APIも、
 
-を接続したシステムに関心があります。
+すべては課題を解決するための手段です。
 
-実際に、
+大切なのは、
 
-* TradingViewからのシグナル受信
-* 証券会社・取引所APIとの連携
-* 自動実行
-* Telegram監視
-* Threads API自動化
-* OpenAI APIを利用したコンテンツ生成
-* LINE上でのAI開発相談受付
+「今動くシステム」を作ることではなく、
 
-などのシステムを自ら構築し、運用しています。
+**長く安心して運用できるシステムを設計すること**だと考えています。
 
-単純なサンプルを作ることではなく、
+その考え方は、
 
-> 実際に動かし、壊れた部分を見つけ、修正し、再び運用する
-
-という開発を続けています。
+このプロジェクトのすべての設計判断につながっています。
 
 ---
 
-# What I Can Help Build
+# 開発の進め方
 
-ご相談可能な例：
+システム開発は、
 
-* LINE Bot
-* LINE業務自動化
-* AIチャット・問い合わせ対応
-* OpenAI API連携
-* Webhookベースの自動化
-* 外部API連携
-* OAuth / Token管理
-* 既存システムとの連携
-* 業務自動化
-* 管理・通知システム
-* 既存システムの改善
-* AIを利用した業務フロー
-* APIを組み合わせたバックエンドシステム
+コードを書くことから始まるものではありません。
 
-まだ具体的な仕様が決まっていない段階でも問題ありません。
+まずは、
+
+「何を実現したいのか」
+
+を整理することから始まります。
+
+多くの場合、
+
+実現したいことは決まっていても、
+
+最適な方法までは決まっていません。
+
+だからこそ、
+
+要件を整理しながら、
+
+一緒に設計していくことを大切にしています。
+
+基本的には、
+
+次の流れで開発を進めています。
 
 ```text
-「こういう作業を自動化したい」
-「こういうシステムを作りたい」
-「今の作業を減らしたい」
+Consultation
+        │
+        ▼
+Requirement Analysis
+        │
+        ▼
+Architecture Design
+        │
+        ▼
+Implementation
+        │
+        ▼
+Testing
+        │
+        ▼
+Deployment
+        │
+        ▼
+Continuous Improvement
 ```
 
-という段階からご相談いただけます。
+仕様は、
+
+開発が進むにつれて変わることも少なくありません。
+
+そのため、
+
+変更しやすく、
+
+改善し続けられる構成を意識しています。
 
 ---
 
-# Contact
+# 技術スタック
 
-開発や自動化についてご相談がございましたら、お気軽にご連絡ください。
+現在は主に以下の技術を利用しています。
 
-特に、
+### Backend
 
-```text
-LINE
-AI
-API連携
-Webhook
-業務自動化
-既存システム改善
-```
+- Java
+- Spring Boot
+- REST API
+- Webhook
+- JPA / Hibernate
 
-に関するご相談を歓迎しています。
+### AI Integration
+
+- OpenAI API
+- Structured Output
+- Prompt Engineering
+- Conversation State Design
+
+### Infrastructure
+
+- AWS EC2
+- Ubuntu Linux
+- Nginx
+
+### External Integration
+
+- LINE Messaging API
+- Meta Threads API
+- Telegram Bot API
+- TradingView Webhook
+- External REST APIs
+
+技術そのものではなく、
+
+適切な技術を適切な場所で使うことを重視しています。
 
 ---
 
-> **Built for real conversations.**
+# 対応可能な開発内容
+
+現在は、
+
+バックエンドシステムを中心に、
+
+AIや外部サービスを組み合わせたシステム開発を行っています。
+
+例えば、
+
+- LINE Bot開発
+- LINE業務自動化
+- AI相談システム
+- OpenAI API連携
+- Webhookベースのシステム
+- 外部API連携
+- 管理システム
+- 通知システム
+- 既存システムの改善
+- AIを活用した業務フローの構築
+
+など、ご相談いただけます。
+
+まだ仕様が決まっていない段階でも問題ありません。
+
+「こんなことはできますか？」
+
+というご相談からでも、お気軽にお声がけください。
+
+---
+
+# このリポジトリについて
+
+このリポジトリは、
+
+完成したソースコードを公開することを目的としたものではありません。
+
+実際の運用を通して得られた知見や、
+
+システム設計に対する考え方を共有するためのプロジェクトです。
+
+どのような技術を使ったかよりも、
+
+なぜその設計を選んだのか。
+
+なぜその責務分離にしたのか。
+
+なぜその構成が必要だったのか。
+
+そうした背景を伝えることを重視しています。
+
+---
+
+# ご相談について
+
+AIを業務へ導入したい。
+
+LINEを活用したサービスを作りたい。
+
+既存システムを改善したい。
+
+複数のAPIを組み合わせた仕組みを構築したい。
+
+そのようなご相談を歓迎しています。
+
+要件がまだ整理できていない段階でも構いません。
+
+まずは、
+
+「何を実現したいのか」
+
+を一緒に整理するところから始めましょう。
+
+良いシステムは、
+
+良い設計だけでなく、
+
+良いコミュニケーションから生まれると考えています。
+
+---
+
+# 最後に
+
+AIは、
+
+これからも進化し続けます。
+
+新しいモデルが登場し、
+
+できることも増えていくでしょう。
+
+しかし、
+
+長く運用できるシステムに必要なのは、
+
+最新の技術だけではありません。
+
+責務を明確に分離すること。
+
+変化に対応できる構造を作ること。
+
+障害が起きても継続して運用できること。
+
+そして、
+
+継続的に改善し続けること。
+
+私は、
+
+そうしたシステムを設計し、
+
+育てていくことを大切にしています。
+
+もし、
+
+同じ考え方でシステムを作りたいとお考えでしたら、
+
+ぜひお気軽にご相談ください。
+
+---
+
+> **技術は変わり続けます。**
 >
-> **Built for failure.**
+> **設計思想は長く残ります。**
 >
-> **Continuously improved through real operation.**
->
-> **AI is powerful.**
->
-> **But the system around it matters more.**
+> **信頼できるシステムは、丁寧な設計から生まれます。**
+
+
+
