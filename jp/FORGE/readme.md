@@ -2,119 +2,144 @@
 
 > **Never explain your project twice.**
 >
-> AIにコードを書かせるだけではなく、
-> **AIがプロジェクトを理解し、判断を引き継ぎ、検証された状態で開発を続けられる環境そのものを設計しました。**
+> 必要な文脈だけをAIへ渡し、  
+> セッションを越えて知識と判断を引き継ぎ、  
+> 実行結果を検証しながら、次の開発へつなげる。
 
-FORGEは、私自身が複数の実プロジェクトをAIと開発する中で感じた問題を解決するために作った、**AI支援開発用のEngineering System**です。
+FORGEは、AIにコードを書かせるためだけのツールではありません。
 
-一般公開を目的に作ったデモではありません。
+私自身が複数の実プロジェクトをAIと継続開発する中で感じた、
 
-LINE業務自動化、Threads運用自動化、Trading Automationなど、実際に開発・運用している複数のプロジェクトを継続的に扱うために、自分自身の開発環境として設計・改善を続けています。
+- セッションごとの文脈消失
+- 不要なコード参照
+- 過去の設計判断との矛盾
+- AIの自己申告と実際の結果の不一致
+- 長期開発で蓄積される知識の扱い
 
----
+といった問題を、**AIが作業する環境側から解決するために作ったEngineering System**です。
 
-# なぜ作ったのか
+LINE業務自動化、Threads運用自動化、Trading Platformなど、私自身が実際に開発・運用している複数のプロジェクトで使用しています。
 
-AIは、コードを書く速度を大きく上げてくれます。
-
-しかし、実際のプロジェクトを長期間AIと開発していると、別の問題が出てきます。
-
-* 前回までの背景を忘れる
-* なぜその設計にしたのかを知らない
-* 必要のないファイルまで読み始める
-* 過去に決めた方針と矛盾する変更をする
-* セッションが変わるたびに説明をやり直す
-* 「修正しました」と報告しても、実際の結果と一致するとは限らない
-
-つまり問題は、
-
-**AIがコードを書けるかどうかではありません。**
-
-問題は、
-
-> **AIがプロジェクトの状態を正しく引き継ぎ、
-> 必要な情報を使い、
-> 変更結果を検証しながら開発を続けられるか。**
-
-ということでした。
-
-そこで私は、AIそのものを変えるのではなく、
-
-**AIが作業する環境側を設計する**
-
-ことにしました。
-
-それがFORGEです。
+販売用のデモとして作ったものではなく、**自分自身の開発環境として使いながら改善を続けています。**
 
 ---
 
-# FORGEが管理するもの
+# Why FORGE Exists
 
-FORGEでは、AIとの開発を単発のチャットとして扱いません。
+AIはコードを書く速度を大きく上げてくれます。
 
-プロジェクトの継続的な開発フローとして扱います。
+しかし、長期間AIと開発していると、問題はコード生成能力だけではないことが分かりました。
+
+たとえば、
+
+- 前回までの背景を知らない
+- なぜその設計にしたのか分からない
+- すでに却下した方法を再び提案する
+- 今回の作業に不要なファイルまで読み始める
+- セッションが変わるたびに説明をやり直す
+- 「完了しました」という報告と実際の状態が一致しない
+
+といった問題です。
+
+FORGEを作るきっかけの一つも、AIが作業完了を報告したにもかかわらず、期待した変更が実際には反映されていなかった経験でした。
+
+そこから、FORGEでは次の考え方を重視しています。
+
+> **AIの自己申告を、成功の証拠にはしない。**
+
+重要なのは、
+
+**何が変更され、何が実行され、どの結果が確認されたか**
+
+です。
+
+そのためFORGEでは、AIとの開発を単発のPrompt / Responseではなく、
 
 ```text
-Project
-   │
-   ▼
 Context
-   │
-   ▼
-Knowledge
-   │
-   ▼
-Engineering Decisions
-   │
-   ▼
+   ↓
+Knowledge / Decisions
+   ↓
 AI Development
-   │
-   ▼
-Validation
-   │
-   ▼
-Snapshot
-   │
-   ▼
-Next Session
+   ↓
+Verification
+   ↓
+Handover
+   ↓
+Next Turn / Next Session
 ```
 
-AIのセッションが変わっても、
+という継続的なEngineering Processとして扱います。
 
-**「また最初から説明する」ではなく、
-「前回の続きから開発する」**
+目標は、
 
-ことを目標にしています。
+> **AIが毎回プロジェクトを初めて見る状態をやめること。**
+
+です。
 
 ---
 
-# 1. Context — 必要な情報だけを渡す
+# 1. Context & Handover
 
-大きなプロジェクトをAIに扱わせるとき、
+## 必要な情報だけを渡す
 
-プロジェクト全体を毎回そのまま渡すのは効率的ではありません。
+大きなリポジトリをAIに扱わせるとき、プロジェクト全体を毎回そのまま渡す必要はありません。
 
-FORGEでは、実際のリポジトリを対象に、
+関係のないコードまで大量に渡すと、
 
-**その作業に必要な初期コンテキストを絞り込んでAIへ引き渡す**
+- トークン消費が増える
+- 重要な情報が埋もれる
+- 作業範囲が不必要に広がる
+- 誤った変更対象を選ぶ可能性が増える
 
-仕組みを持っています。
+という問題があります。
 
-2026年8月14日に、FORGE自身の実リポジトリを対象として再検証しました。
+FORGEでは、**今の作業に必要なソースとコード領域を選び、必要な粒度でAIへ渡す**という考え方を採用しています。
 
-### 実測結果
+```text
+Large Repository
+       ↓
+Relevant Sources
+       ↓
+Relevant Code Regions
+       ↓
+Compact Context
+       ↓
+AI
+```
 
-| 項目                         |                結果 |
-| -------------------------- | ----------------: |
-| Audit Scope                | **1,269 sources** |
+すべてのコードを同じ粒度で渡すわけではありません。
+
+必要に応じて、
+
+```text
+全文
+関連部分
+署名
+構造
+除外
+```
+
+のように扱う範囲を変えます。
+
+具体的なランキング方式、スコア、重み、選択アルゴリズムは公開していません。
+
+---
+
+## Verified Context Audit — 2026.08.14
+
+2026年8月14日、FORGE自身の実リポジトリを対象に、当時のProduction Context経路で監査を行いました。
+
+| 項目 | 結果 |
+|---|---:|
+| Audit Scope | **1,269 sources** |
 | Current Repository Sources | **1,268 sources** |
-| Focused Sources            |     **8 sources** |
-| Initial Context Reduction  |        **98.91%** |
+| Focused Sources | **8 sources** |
+| Initial Context Reduction | **98.91%** |
 
 ```text
 1,269 audited sources
-        │
-        ▼
+        ↓
 8 focused sources
 ```
 
@@ -126,521 +151,678 @@ FORGEでは、実際のリポジトリを対象に、
 8,000
 ```
 
-まで初期コンテキストを集約しました。
+となりました。
 
-> **重要**
->
-> 98.91%という値は、今回検証した**初期プロンプトへの引き渡し範囲**に対する実測結果です。
-> その後のすべてのTool Useや追加参照まで98.91%削減される、と主張するものではありません。
+この**98.91%**は、2026.08.14時点の特定条件下で行った**初期コンテキスト監査の歴史的な実測値**です。
 
-数字を大きく見せることより、
+すべてのプロジェクトやターンで同じ削減率になるという意味ではなく、その後のすべてのTool Useまで98.91%削減されると主張するものでもありません。
 
-**何を測った数字なのかを明確にすること**
-
-を優先しています。
+数字そのものより、**何を測った数字なのかを明確にすること**を優先しています。
 
 ---
 
-# 2. Knowledge — 確定した知識を引き継ぐ
+## セッションが変わっても、続きから始める
 
-プロジェクトには、ソースコードだけでは表現しきれない情報があります。
+FORGEを作り始めた本来の目的は、AIセッション間の引き継ぎを安定させることでした。
 
-たとえば、
+プロジェクトにはコードだけでは分からない情報があります。
 
-* 現在どこまで完成しているのか
-* 過去にどんな問題が起きたのか
-* 何を試して失敗したのか
-* どの仕様が確定しているのか
-* 次に何をするべきなのか
+- 現在どこまで完成しているか
+- 何が未完了なのか
+- どんな問題が起きたか
+- 何を試して失敗したか
+- どの仕様が確定しているか
+- なぜその設計を選んだか
+- 次に何をするべきか
 
-といった情報です。
-
-FORGEでは、こうした情報を単なる会話履歴として扱わず、
-
-**次のAIセッションが利用できるプロジェクト知識**
-
-として引き継ぎます。
-
-ただし、AIが勝手に推測した内容をそのまま永続的な知識にはしません。
-
-**人間が確認・承認した内容と、AIの一時的な推論を区別する**
-
-ことを前提に設計しています。
-
----
-
-# 3. Engineering Decisions — 「なぜそうしたか」を残す
-
-コードだけを読めば、
-
-**何が実装されているか**
-
-はある程度わかります。
-
-しかし、
-
-**なぜその実装を選んだのか**
-
-までは分からないことがあります。
-
-実際の開発では、この「なぜ」が非常に重要です。
-
-FORGEでは、
-
-* 過去に採用した設計方針
-* 意図的に採用しなかった方法
-* 運用上守るべきルール
-* 明示的に固定したアーキテクチャ判断
-
-を次の開発セッションでも参照できるようにします。
-
-これによって、
-
-> 前回のAIが決めたことを、
-> 次のAIが知らずに壊す
-
-という問題を減らします。
-
----
-
-# 4. Validation — AIの自己申告ではなく、結果で確認する
-
-FORGEを作るきっかけの一つになったのは、
-
-AIの報告と実際の状態が一致しないケースでした。
-
-AIが、
-
-> 「完了しました」
-
-と答えたとしても、
-
-それだけを成功判定には使いません。
-
-実際の開発では、
-
-* Build
-* Automated Test
-* 実際の生成物
-* 変更結果
-* Providerへの引き渡し状態
-
-など、**外部から確認できる結果**を重視します。
-
----
-
-# Verified Evidence
-
-FORGEでは、公開可能な範囲について実リポジトリ上で再検証を行いました。
-
-## Automated Test Suite
-
-Fresh Clean Buildを実行し、JUnit XMLを個別集計しました。
-
-| 項目       |      結果 |
-| -------- | ------: |
-| Tests    | **892** |
-| Failures |   **0** |
-| Errors   |   **0** |
+これらを毎回人間が説明し直すのではなく、**次のAIが利用できるプロジェクト状態として引き継ぐ**ことがFORGEの役割です。
 
 ```text
-892 tests
-0 failures
-0 errors
+AI Development
+      ↓
+Meaningful Change
+      ↓
+Review
+      ↓
+Handover / Status / History
+      ↓
+Next Session
 ```
 
-295件のJUnit XML Reportを集計した結果です。
+意味のある変更が無ければ、記録を増やすためだけに更新することは目的にしていません。
 
----
+次のセッションは、
 
-## Exact Prompt Handoff
-
-Context Engine側で生成されたFocused Promptと、
-
-実際にProvider実行境界へ渡されたPromptが一致していることを検証しました。
-
-```text
-Generated Focused Prompt
-          │
-          ▼
-Provider Boundary
-          │
-          ▼
-EXACT MATCH
-```
-
-検証結果:
-
-```text
-selectedFileCount = 8
-
-tests    = 1
-failures = 0
-errors   = 0
-```
-
-これは、
-
-> 「Context Engineが8件を選んだ」
-
-だけではなく、
-
-> **「実際にAI Providerへ渡される境界まで、その結果が維持されている」**
-
-ことを確認するための検証です。
-
----
-
-# One Real Development Flow
-
-FORGEを使った開発は、概念上のデモだけではありません。
-
-実際の作業では、次のような流れになります。
-
-```text
-1. Project Open
-        │
-        ▼
-2. Previous State Restore
-        │
-        ▼
-3. Context Selection
-        │
-        ▼
-4. Knowledge Load
-        │
-        ▼
-5. Decision History Load
-        │
-        ▼
-6. AI Development
-        │
-        ▼
-7. Build / Test / Validation
-        │
-        ▼
-8. Snapshot
-        │
-        ▼
-9. Next Session
-```
-
-次のAIセッションは、
-
-プロジェクトを初めて見る新人としてではなく、
-
-**前任者から引き継ぎを受けた開発者に近い状態**
+> **プロジェクトを初めて見る新人ではなく、前任者から引き継ぎを受けた開発者に近い状態**
 
 から始めることを目指しています。
 
 ---
 
-# 「作って終わり」にしないための仕組み
+## Knowledge & Engineering Decisions
 
-FORGEで重要視しているのは、
+FORGEでは、現在の状態だけでなく、**なぜその判断をしたのか**も引き継ぎます。
 
-AIの生成速度そのものではありません。
+コードを見れば「何が実装されているか」は分かります。
 
-### Project Continuity
+しかし、
 
-セッションが変わっても、プロジェクトの状態を引き継ぐ。
+- なぜこの方式を採用したのか
+- なぜ別案を採用しなかったのか
+- 何を意図的に固定したのか
+- 今後も守るべき制約は何か
 
-### Focused Context
+までは、コードだけでは分からないことがあります。
 
-必要な情報を必要なタイミングで扱う。
+こうした情報を次のAIセッションでも参照できるようにすることで、
 
-### Engineering Knowledge
+> 前回のセッションで意図的に決めたことを、次のAIが知らずに壊す
 
-確定した知識と一時的な推論を混同しない。
-
-### Decision History
-
-過去の設計理由を次の変更へ引き継ぐ。
-
-### Validation
-
-AI自身の報告だけで完了判定をしない。
-
-### Snapshot
-
-その時点の状態を次の作業へ残す。
-
-これらを組み合わせて、
-
-**AIとの開発そのものを、継続可能なEngineering Processとして扱う**
-
-ことがFORGEの中心です。
+という問題を減らします。
 
 ---
 
-# 実際のプロジェクトで使用
+## Traceable Knowledge
 
-FORGEは、公開用に作った単独デモではありません。
+長期開発では、プロジェクトの事実も変化します。
 
-私自身が開発・運用している複数のシステムを扱うために使用しています。
+```text
+OPEN
+ ↓
+RESOLVED
+ ↓
+REOPENED
+```
 
-## LINE Automation
+のように、一度解決した問題が再び発生することもあります。
 
-日本のお客様からの問い合わせを入口として、
+そのためFORGEでは、単純に古い情報を消して最新情報だけを残すのではなく、**出所・時点・状態を意識しながら変化を追跡できるKnowledge**を重視しています。
 
-* AI一次対応
-* 要件ヒアリング
-* 状態管理
-* Google Calendar予約
-* Google Sheets連携
-* 通知
-* Failure / Fallback
+現在、より時間的な変化を扱うMemory経路は**SHADOW**で検証中です。
 
-までを一つの業務フローとして扱う自動化システムです。
+最新の検証時点では、
 
----
+```text
+5 / 15 genuine diverse turns
+```
 
-## Threads Automation
+まで実運用Evidenceが蓄積されています。
 
-日本語ユーザー向けThreadsアカウントを対象に、
+まだ既定のMemory経路ではありません。
 
-* Content Planning
-* AI Generation
-* Validation
-* Duplicate Control
-* Scheduled Publishing
-* Metrics
-* Comment Reply
-
-などを継続運用するシステムです。
+新しい仕組みを作ったからすぐ置き換えるのではなく、十分なEvidenceを確認してから次の判断を行います。
 
 ---
 
-## Trading Automation Platform
+## Knowledge Evolution と Code Self-Improvement
 
-TradingViewからのイベントを起点に、
+FORGEでは、この二つを分けて扱います。
 
-* Webhook Reception
-* Broker API Integration
-* Order Execution
-* Verification
-* Telegram Monitoring
-* AWS Operation
+**Knowledge Evolution**は、プロジェクトの記憶・状態・判断を整理し、次のセッションへ正しく引き継ぐためのものです。
 
-までを統合した、自身で実運用しているシステムです。
+**Code Self-Improvement**は、実際の運用Evidenceから改善候補を見つけ、検証へ渡すためのものです。
 
----
+```text
+Knowledge Evolution
+Project Change
+      ↓
+Knowledge / Handover Update
+      ↓
+Next Session
+```
 
-これらはそれぞれ別のプロジェクトですが、
+```text
+Code Self-Improvement
+Operational Evidence
+      ↓
+Improvement Candidate
+      ↓
+Independent Verification
+```
 
-開発を続けるための基盤として、
+つまり、
 
-**同じFORGEの考え方と開発フローを再利用しています。**
+> **正しく覚え続けること**
 
----
+と、
 
-# Current Implementation Status
+> **根拠をもとに改善すること**
 
-FORGEは完成を装ったプロジェクトではありません。
+は別の役割です。
 
-実装済みの部分と、これから改善する部分を分けて扱っています。
-
-## Implemented
-
-* プロジェクト単位のContext管理
-* Project Knowledgeの継承
-* Engineering Decisionの継承
-* AIセッション間の継続
-* Focused Context生成
-* Provider BoundaryまでのHandoff検証
-* Build / TestベースのValidation
-* Snapshotを使った状態継承
-* 複数実プロジェクトでの利用
-
-## Current Focus
-
-* AIが変更してよい範囲の制御強化
-* Validationフローの標準化
-* 人間によるKnowledge Approval体験の改善
-* Context Selectionの継続監査
-
-「完成した」と言うためにRoadmapを隠すのではなく、
-
-**現在どこまでできていて、次に何を改善しているのか**
-
-を明確にしています。
+後半では、このEvidence・Self Improvement・Independent Verificationについて説明します。
 
 ---
 
-# FORGEを作って得たもの
+# 2. One Real Turn
 
-このプロジェクトから得た最大の知見は、
+FORGEでは、AIとの1回のやり取りを単なるチャットとして扱いません。
 
-AI開発に必要なのは、より強いPromptだけではない
+ひとつの論理的なターンを、
 
-ということでした。
+```text
+Project State
+   ↓
+Context Selection
+   ↓
+AI Development
+   ↓
+Verification
+   ↓
+Handover Update
+   ↓
+Turn Evidence
+```
 
-AIを実際の開発へ組み込むには、
+として追跡します。
 
-* コンテキスト
-* 状態
-* 知識
-* 設計判断
-* 変更
-* 検証
-* 復元
+実運用では、
 
-を含む**システム全体の設計**が必要になります。
+```text
+Real Turn
+   ↓
+Real File
+   ↓
+Real Symbol
+```
 
-これはFORGEだけに限った話ではありません。
+まで結び付いた記録が生成されることを確認しています。
 
-外部APIをつなぐ業務自動化でも、
+実際のファイルパス、シンボル名、内部保存形式は公開していません。
 
-AIを使う社内システムでも、
+また、
 
-長期間運用するバックエンドでも、
+```text
+Context Participation
+        ≠
+Root Cause
+```
 
-重要なのは、
+という区別も重要にしています。
 
-> **一度動かすことではなく、
-> 継続して扱える仕組みにすること。**
+あるファイルがそのターンの文脈に含まれていたからといって、それだけで問題の原因だったとは判断しません。
 
-だと考えています。
+**何が使われたかを追跡することと、何が原因だったかを断定することは別です。**
+
+この区別が、後半のEvidence-to-Code AttributionやSelf Improvementにもつながっています。
+# 3. Evidence — 報告ではなく、結果で確認する
+
+FORGEでは、AIが
+
+> 「修正しました」  
+> 「テストは問題ありません」  
+> 「改善しました」
+
+と報告しただけでは、成功とは扱いません。
+
+重要なのは、**外部から確認できるEvidenceがあるか**です。
 
 ---
 
-# このプロジェクトでお見せしたいこと
+## Historical Context Audit
 
-私がFORGEでお見せしたいのは、
+2026年8月14日、FORGE自身の実リポジトリを対象にContext Auditを行いました。
 
-「AIを使えます」
+```text
+1,269 audited sources
+        ↓
+8 focused sources
+```
 
-ということではありません。
+概算トークン換算:
 
-AI APIを呼ぶだけなら、それほど難しいことではありません。
+```text
+736,903
+   ↓
+8,000
+```
 
-お見せしたいのは、
+初期Context Reduction:
 
-> **AIを含む複雑な処理を、
-> 実際に運用できるシステムとして設計できること。**
+```text
+98.91%
+```
 
-そして、
+これは**2026.08.14時点の歴史的な実測値**です。
 
-> **必要になった仕組みを、自分で設計し、実装し、検証し、
-> 実際の開発環境として使い続けられること。**
+現在のすべてのターンで同じ削減率になるという意味ではありません。
+
+---
+
+## Exact Prompt Handoff
+
+Context側で生成されたFocused Promptが、実際のAI Provider実行境界まで維持されていることも検証しました。
+
+```text
+Generated Focused Prompt
+          ↓
+Provider Boundary
+          ↓
+EXACT MATCH
+```
+
+当時の検証結果:
+
+```text
+selectedFileCount = 8
+tests = 1
+failures = 0
+errors = 0
+```
+
+つまり、
+
+**「Context側で8件を選んだ」だけではなく、その結果が実際のAI実行境界まで届いたこと**
+
+を確認しています。
+
+---
+
+## Current Full Regression
+
+最新のFull Regressionでは、
+
+| 項目 | 結果 |
+|---|---:|
+| Total Tests | **1,339** |
+| Passed | **1,338** |
+| Known Pre-Existing Failure | **1** |
+
+既知の1件は、直近の実装変更とは無関係であることを確認している既存のBenchmark条件によるものです。
+
+**0 failuresだったことにはしません。**
+
+FORGEでは、数字をきれいに見せることより、実際に確認できた状態をそのまま残すことを優先しています。
+
+---
+
+## Beyond Unit Tests
+
+単体テストだけでなく、使い捨ての隔離環境で実Repository操作を伴う検証も行っています。
+
+```text
+Candidate
+   ↓
+Isolated Environment
+   ↓
+Real Repository Operations
+   ↓
+Verification
+```
+
+実際のファイルパス、内部手順、保護ロジックは公開していません。
+
+---
+
+# 4. Self Improvement & Independent Verification
+
+FORGEには、実際の運用Evidenceから改善候補を見つける仕組みがあります。
+
+ただし、
+
+> AIが「もっと良くできそう」と考えた
+
+という理由だけでコードを変更することはありません。
+
+公開上の流れは、
+
+```text
+OBSERVE
+   ↓
+ATTRIBUTE
+   ↓
+DISCOVER
+   ↓
+PROPOSE
+   ↓
+VERIFY
+   ↓
+ACCEPT / REJECT / DEFER
+```
 
 です。
 
-私はバックエンドを中心に、
+Evidenceが不十分であれば、**DEFER**します。
 
-* 業務自動化
-* API連携
-* Webhook
-* AI連携
-* 外部サービス統合
-* 状態管理
-* Validation
-* Monitoring
-* Cloud Operation
-
-などを組み合わせたシステム開発を行っています。
+実際にFORGE自身を対象としたDiscoveryでも、改善を進めるだけの根拠が無かった場面ではDEFERを選択しました。
 
 ---
 
-# こんなご相談と相性があります
+## Proposer ≠ Judge
+
+Self Improvementで最も重要な原則の一つです。
+
+```text
+Proposer ≠ Judge
+```
+
+変更を提案する側と、その変更を採用するか判断する側を分けています。
+
+同じ側が、
+
+```text
+変更を作る
+   ↓
+判定基準を決める
+   ↓
+自分で合格する
+```
+
+という構造では、独立した検証になりません。
+
+そのため、Candidateはまず本体から隔離された状態で検証されます。
+
+公開上の流れは、
+
+```text
+Candidate
+   ↓
+Isolated Verification
+   ↓
+Integrity / Safety
+   ↓
+Compile / Test
+   ↓
+Measured Evidence
+   ↓
+ACCEPT / REJECT / RETRY
+   ↓
+Safe Local Promotion
+```
+
+です。
+
+内部の判定順序、Threshold、具体的な保護対象は公開していません。
+
+---
+
+## 「壊れていない」と「良くなった」は別
+
+Testが通っただけでは、
+
+> 改善した
+
+とは判断しません。
+
+性能改善なら、実際に性能が改善したEvidenceが必要です。
+
+不具合修正なら、元の問題が再現でき、変更後に解消したことを確認する必要があります。
+
+つまり、
+
+**壊れていないこと**
+
+と、
+
+**実際に改善したこと**
+
+を分けて扱います。
+
+---
+
+## Architecture Guardが実際に止めた変更
+
+この境界は、設計上の説明だけではありません。
+
+Self Improvement機能の実装中、生成側コードが本来越えてはいけない検証側のArchitecture Boundaryへ依存したことがありました。
+
+その変更は、人間が後から気付く前に**既存のArchitecture GuardによってBuild時に検出されました。**
+
+結果として、その変更はそのまま採用されず、境界を維持する構造へ修正されました。
+
+> **ルールは、文書だけではなく、実際にBuildで働く形にする。**
+
+FORGEで重視している考え方の一つです。
+
+---
+
+## Safe Local Promotion
+
+独立した検証を通過したCandidateだけがLocal側へ昇格します。
+
+```text
+Verified Candidate
+        ↓
+Local Promotion
+
+Autonomous Remote Push
+        ✕
+```
+
+自律的な処理が勝手にRemote RepositoryへPushすることはありません。
+
+---
+
+# 5. Operational Status
+
+FORGEでは、
+
+**実装したこと**
+
+と、
+
+**Productionの既定動作として使っていること**
+
+を分けて扱っています。
+
+現在の公開上の状態は次の通りです。
+
+| Capability | Status |
+|---|---|
+| Context Diet | **PRODUCTION** |
+| Living / Semantic Handover | **PRODUCTION** |
+| Turn Tracking | **PRODUCTION** |
+| Turn Provenance | **PRODUCTION** |
+| Evidence-to-Code Attribution | **FLAGGED / limited rollout** |
+| Temporal Memory | **SHADOW — 5 / 15 genuine diverse turns** |
+| Independent Verification | **PRODUCTION** |
+| Improvement Discovery | **PROVEN / GATED** |
+| Automatic Self-Improvement Execution | **OFF / GATED** |
+| Temporal Default Rollout | **PENDING EVIDENCE** |
+
+**SHADOW**は既存動作を変えず裏側で評価中、  
+**FLAGGED**は限定的な適用範囲で評価中、  
+**GATED**は実装済みでも自動実行を制限している状態です。
+
+新しい仕組みを作っただけで、すぐにProduction扱いにはしません。
+
+---
+
+## Current Limitations
+
+現在、Automatic Self-Improvementは常時ONではありません。
+
+```text
+Automatic Self-Improvement
+OFF / GATED
+```
+
+Temporal MemoryもまだDEFAULTではなく、SHADOWで実運用Evidenceを蓄積しています。
+
+また、FORGEは**無制限なRecursive Self-Modification**を目的にしていません。
+
+通常の改善Candidateが、自分自身を評価する検証ルールまで自由に変更できる状態にはしていません。
+
+自律性を最大化することより、
+
+**検証可能性と安全な境界を維持すること**
+
+を優先しています。
+
+---
+
+# 6. Real Projects
+
+FORGEは公開用の単独Demoではありません。
+
+私自身が開発・運用している複数の実プロジェクトで、開発基盤として使用しています。
+
+## LINE Automation
+
+日本向けの問い合わせ対応を入口として、
+
+- AI一次対応
+- 要件整理
+- 状態管理
+- Google Calendar連携
+- Google Sheets連携
+- 通知
+- Failure / Fallback
+
+などを一つの業務フローとして扱うシステムです。
+
+## Threads Automation
+
+日本語ユーザー向けThreads運用で、
+
+- Content Planning
+- AI Generation
+- Validation
+- Duplicate Control
+- Scheduled Publishing
+- Metrics
+- Comment Reply
+- 運用結果を使った改善
+
+などを扱っています。
+
+## Trading Platform
+
+市場データや外部APIを扱い、
+
+- Market Data
+- Strategy Evaluation
+- Backtesting
+- Broker API Integration
+- Validation
+- Monitoring
+- Notification
+- AWS Operation
+
+などを扱うシステムです。
+
+これらは別々のプロジェクトですが、
+
+```text
+Context
+Memory
+Decision
+Verification
+Handover
+```
+
+という長期開発上の問題は共通しています。
+
+FORGEは、プロジェクトごとにAI開発環境を作り直すのではなく、**同じEngineering Processを再利用するための基盤**として使っています。
+
+---
+
+# 7. What This Demonstrates
+
+FORGEで示したいのは、
+
+> 「AIを使えます」
+
+ということではありません。
+
+AI APIを呼んだり、AIにコードを書かせたりするだけなら、それ自体は特別なことではありません。
+
+示したいのは、
+
+> **AIを含む複雑な処理を、継続して扱えるEngineering Systemとして設計・実装・検証できること。**
+
+です。
+
+私が扱っているのは、たとえば、
+
+- 業務自動化
+- Backend API
+- AI連携
+- Webhook
+- External API Integration
+- Google Services連携
+- 状態管理
+- Validation
+- Monitoring
+- AWS上での継続運用
+
+などです。
 
 FORGEそのものを販売しているわけではありません。
 
-このプロジェクトで使っている設計・開発経験は、たとえば次のような案件に活かせます。
+この設計・開発経験は、
 
-* LINEを使った問い合わせ・予約自動化
-* 社内業務の自動化
-* 複数SaaS / API間の連携
-* Webhookを起点にした自動処理
-* AIを組み込んだ業務システム
-* Google Calendar / Sheets / Gmailなどとの連携
-* 定型業務の自動実行
-* 通知・監視システム
-* バックエンドAPI開発
-* AWS上で継続稼働する小〜中規模システム
-* 既存業務を整理したうえでの自動化設計
+- LINEを使った問い合わせ・予約自動化
+- 社内業務の自動化
+- 複数SaaS / API間の連携
+- Webhookを起点にした自動処理
+- AIを組み込んだ業務システム
+- 通知・監視システム
+- バックエンドAPI開発
+- AWS上で継続稼働する小〜中規模システム
+
+などに活かせます。
 
 要件が完全に整理されていない段階でも、
 
-**「今、人が何をしているのか」から整理して、
-どこまで自動化するのが現実的か**
+**「今、人が何をしているのか」から整理し、どこまで自動化するのが現実的か**
 
-を一緒に考えることができます。
+を考えることができます。
 
 ---
 
-# Public / Private Boundary
+# 8. Public / Private Boundary
 
-このリポジトリでは、
+この公開Repositoryでは、
 
-**FORGEの価値を確認できる証拠は公開し、
-その価値を生み出す内部実装は公開しない**
+> **FORGEの価値を確認できるEvidenceは公開し、  
+> その価値を生み出すEngineering Assetは公開しない。**
 
 という方針を取っています。
 
 ## Public
 
-* 解決している問題
-* High-level workflow
-* 実装範囲
-* 実測結果
-* Test結果
-* Context Reduction結果
-* Provider Boundaryの検証結果
-* 実プロジェクトでの使用事例
+- 解決している問題
+- High-Level Architecture
+- 開発フロー
+- Operational Status
+- Context Audit
+- Regression結果
+- Provider Boundaryの検証結果
+- Self Improvementの基本原則
+- Independent Verificationの考え方
+- 実プロジェクトでの使用例
 
 ## Private
 
-次の内容は公開していません。
+- Context Selection Algorithm
+- Ranking / Scoring / Weighting
+- Token Allocation Logic
+- Prompt Template / Provider Payload
+- Knowledge / Evidence内部Schema
+- Candidate Generation Logic
+- Verification / Safetyの具体的なRule
+- Threshold / Retry Policy
+- Storage Structure
+- Class / Method / Package構造
+- FORGE本体のSource Code
+- 非公開Log / Credential / Secret
 
-* Context Selection Algorithm
-* Ranking / Scoring Logic
-* Weighting
-* Token Allocation Logic
-* Prompt Template
-* Provider Payload
-* Knowledge内部Schema
-* Engineering Decision内部構造
-* Snapshot Format
-* Validation Rule
-* Internal API
-* Class / Method / Package構造
-* Storage Structure
-* FORGE本体のSource Code
-* 非公開Log
-* Credential / Secret
+これは成果を大きく見せるためではなく、
 
-これは技術を隠して実績を大きく見せるためではありません。
+**検証可能なEvidenceと、保護すべきEngineering Assetを分離するための判断**です。
 
-**検証可能なEvidenceと、保護すべきEngineering Assetを分離する**
-
-ための判断です。
-
----
-
-# Repository Policy
-
-この公開リポジトリに含まれるのは、
-
-* Portfolio Website
-* 公開用Assets
-* 公開可能な説明資料
-
-のみです。
-
-FORGE本体のソースコードや内部運用情報は含めていません。
+この公開Repositoryには、Portfolio Website、公開用Asset、公開可能なREADMEのみを含めています。
 
 ---
 
 # Portfolio
 
-実際の画面、Evidence、Development Flowはこちらで確認できます。
-
-**FORGE Portfolio**
+### FORGE Portfolio
 
 https://portfolio-643.pages.dev/jp/FORGE/
 
-**Main Portfolio**
+### Main Portfolio
 
 https://portfolio-643.pages.dev/jp/
 
@@ -648,13 +830,13 @@ https://portfolio-643.pages.dev/jp/
 
 # Contact
 
-日本向けのシステム開発・業務自動化についてご相談を受け付けています。
+日本向けのシステム開発・業務自動化について、ご相談を受け付けています。
 
-「こういうことを自動化できるのか分からない」
+「何をどう自動化すればいいか、まだ整理できていない」
 
 という段階でも問題ありません。
 
-現在の作業内容や使っているサービスを整理したうえで、実現方法を検討します。
+現在の作業内容や利用中のサービスを整理したうえで、現実的なシステム化の範囲から検討します。
 
 ### LINE
 
@@ -670,6 +852,10 @@ https://www.threads.com/@len_dev9
 
 ---
 
+> **Never explain your project twice.**
+>
+> 必要な文脈を渡し、判断を引き継ぎ、結果を検証し、次の改善へつなげる。
+>
 > **Built from real engineering practice.**
 >
 > **No fabricated metrics. No exposed internal logic.**
